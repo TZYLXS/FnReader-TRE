@@ -1,0 +1,26 @@
+{
+	"luci-app-fnparse": {
+		"description": "FnReader 软总线解析引擎（OpenWrt/LEDE）",
+		"read": {
+			"ubus": {
+				"fnparse": [
+					"status",
+					"test",
+					"usb",
+					"logs",
+					"version"
+				]
+			},
+			"uci": [ "fnparse" ]
+		},
+		"write": {
+			"ubus": {
+				"fnparse": [
+					"restart",
+					"clearcache"
+				]
+			},
+			"uci": [ "fnparse" ]
+		}
+	}
+}

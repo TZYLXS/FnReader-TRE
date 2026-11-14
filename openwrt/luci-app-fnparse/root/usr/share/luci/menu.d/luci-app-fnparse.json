@@ -1,0 +1,11 @@
+{
+	"admin/services/fnparse": {
+		"title": "FnReader 解析引擎",
+		"order": 60,
+		"action": {
+			"type": "view",
+			"path": "fnparse/settings"
+		},
+		"icon": "cbi-service-generic"
+	}
+}

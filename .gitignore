@@ -1,0 +1,8 @@
+# 调试/临时产物
+_test/
+dist/stage/
+*.exe
+*.log
+
+# Go 构建缓存
+.gocache/

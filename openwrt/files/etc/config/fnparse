@@ -1,0 +1,25 @@
+config fnparse 'main'
+	option enabled '1'
+	# 接入 IP：FnReader 服务端（legado-web）地址，不带 http:// 也可以
+	option server 'http://192.168.5.110:1122'
+	# 访问令牌：服务端「设置 → 令牌」里的 API Token
+	option token ''
+	# 设备名（留空自动用 OpenWRT-<hostname>）
+	option device_name ''
+	# JSON 解析缓存目录；留空且 usb_autodetect=1 时自动选 USB 挂载点
+	option cache_dir ''
+	option usb_autodetect '1'
+	# 并发解析任务数（1-8，路由器建议 1-2）
+	option concurrency '2'
+	# 长轮询等待秒数（服务端上限 30）
+	option poll_wait '20'
+	# 单个正文分片上限（MB，<=8）
+	option part_max_mb '2'
+	# 解析缓存上限（MB，超出按最旧清理）
+	option cache_max_mb '2048'
+	# 原文件临时缓存保留小时数
+	option tmp_ttl_hours '48'
+	# debug/info/warn/error
+	option log_level 'info'
+	# 领取哪些任务类型（逗号分隔）
+	option claim_types 'ebook-parse,ebook-chapter'

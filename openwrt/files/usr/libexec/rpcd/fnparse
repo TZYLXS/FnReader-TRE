@@ -1,0 +1,53 @@
+#!/bin/sh
+# rpcd 自定义对象：LuCI 通过 ubus 调用，避免前端直接拿文件/执行权限
+# 用法：/usr/libexec/rpcd/fnparse <method>，参数 JSON 从 stdin 传入
+
+PROG=/usr/bin/fnparse
+
+case "$1" in
+list)
+	cat <<'EOF'
+{
+  "status": {},
+  "test": {},
+  "usb": {},
+  "version": {},
+  "logs": { "lines": 0 },
+  "clearcache": { "all": 0 },
+  "restart": {}
+}
+EOF
+	;;
+status)
+	$PROG status 2>&1
+	;;
+test)
+	$PROG test 2>&1
+	;;
+usb)
+	$PROG usb 2>&1
+	;;
+version)
+	printf '{"ok":true,"version":"%s"}\n' "$($PROG version 2>/dev/null)"
+	;;
+logs)
+	INPUT=$(cat)
+	LINES=$(printf '%s' "$INPUT" | sed -n 's/.*"lines"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+	[ -z "$LINES" ] && LINES=100
+	$PROG logs -n "$LINES" -json 2>&1
+	;;
+clearcache)
+	INPUT=$(cat)
+	case "$INPUT" in
+	*'"all"'*true*) $PROG clearcache -all 2>&1 ;;
+	*) $PROG clearcache 2>&1 ;;
+	esac
+	;;
+restart)
+	/etc/init.d/fnparse restart >/dev/null 2>&1
+	printf '{"ok":true}\n'
+	;;
+*)
+	printf '{"ok":false,"error":"unknown method"}\n'
+	;;
+esac
