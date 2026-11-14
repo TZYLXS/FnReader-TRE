@@ -133,6 +133,7 @@ openwrt/
   luci-app-fnparse/     LuCI menu/acl/view
 scripts/
   build_pkg.py          交叉编译 + 打 ipk/apk
+  mock_server.py        本地模拟 legado-web，端到端验收
   gen_gbk.py            GBK 表生成
 dist/                   稳定版产物（0.1）
 docs/                   协议对齐文档
@@ -170,6 +171,9 @@ CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o fnp
 - Windows 本机 `go build` 通过；`go vet` 无告警；parse 包单测通过（HTML 块规则、实体、GBK）；
 - 真实样本：EPUB（3 章）、MOBI《水浒传-三章》（3 章，UTF-8 嗅探修正）、PDF（1 节）、
   TXT（1080 字）均解析成功；
+- 端到端联调（`scripts/mock_server.py` 模拟 legado-web）：pending 领任务 → 下载 →
+  解析（命中缓存）→ part0/partN 上传 → `remote/result` 返回
+  `{ok:true, chapters:3, parts:2}`，全链路 35 ms；
 - ARMv7 / ARM64 交叉编译产物经 ELF 头校验（machine 0x28 / 0xB7）；
 - 打包脚本产出 ipk/apk 并生成 SHA256SUMS。
 

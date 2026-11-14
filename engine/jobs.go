@@ -164,7 +164,7 @@ func (e *Engine) runEbookParse(ctx context.Context, job busJob, raw json.RawMess
 	// 断点续传：服务端已收的分片跳过（重试/重派时省流量）
 	received := map[int]bool{}
 	if st, err := e.api.PartsReceived(ctx, p.Sha1); err == nil {
-		for _, seq := range st.Received {
+		for _, seq := range st.Parts {
 			received[seq] = true
 		}
 	}

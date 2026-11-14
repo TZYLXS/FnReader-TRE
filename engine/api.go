@@ -280,15 +280,13 @@ func (c *apiClient) Download(ctx context.Context, fileURL, dest string, expectSi
 		return errors.New(readErrBody(resp))
 	}
 
-	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	flags := os.O_CREATE | os.O_WRONLY | os.O_APPEND
+	if have == 0 {
+		flags = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
+	}
+	f, err := os.OpenFile(dest, flags, 0o644)
 	if err != nil {
 		return err
-	}
-	if have == 0 {
-		if err := f.Truncate(0); err != nil {
-			f.Close()
-			return err
-		}
 	}
 	n, err := io.Copy(f, resp.Body)
 	f.Close()
@@ -303,11 +301,11 @@ func (c *apiClient) Download(ctx context.Context, fileURL, dest string, expectSi
 }
 
 type partResp struct {
-	OK       bool  `json:"ok"`
-	Chapters int   `json:"chapters"`
-	Total    int   `json:"total"`
-	Received []int `json:"received"`
-	Complete bool  `json:"complete"`
+	OK       bool        `json:"ok"`
+	Chapters int         `json:"chapters"`
+	Total    int         `json:"total"`
+	Received interface{} `json:"received"` // 服务端 part 响应可能是数组，兼容数字
+	Complete bool        `json:"complete"`
 }
 
 func (c *apiClient) UploadPart(ctx context.Context, sha1 string, seq, total int, body []byte) (*partResp, error) {
@@ -348,7 +346,7 @@ func (c *apiClient) UploadPart(ctx context.Context, sha1 string, seq, total int,
 type partsState struct {
 	SHA1     string `json:"sha1"`
 	Total    int    `json:"total"`
-	Received []int  `json:"received"`
+	Received int    `json:"received"`
 	Complete bool   `json:"complete"`
 	Status   string `json:"status"`
 	Parts    []int  `json:"parts"`
@@ -359,9 +357,6 @@ func (c *apiClient) PartsReceived(ctx context.Context, sha1 string) (*partsState
 	err := c.getJSON(ctx, "/api/m/ebook/parts", url.Values{"sha1": {sha1}}, &out)
 	if err != nil {
 		return nil, err
-	}
-	if len(out.Received) == 0 && len(out.Parts) > 0 {
-		out.Received = out.Parts
 	}
 	return &out, nil
 }
