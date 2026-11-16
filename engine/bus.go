@@ -260,11 +260,14 @@ func (e *Engine) worker(ctx context.Context, idx int) {
 func (e *Engine) handle(parent context.Context, job busJob) {
 	sha := shaFromPayload(job.Payload)
 	start := time.Now()
-	e.log.Infof("开始任务 %s type=%s sha=%s", job.ID, job.Type, sha)
+	e.log.Infof("开始任务 %s type=%s class=%s sha=%s", job.ID, job.Type, job.TaskClass, sha)
 
 	timeout := 12 * time.Minute
-	if job.Type == "ebook-chapter" {
+	switch job.Type {
+	case "ebook-chapter":
 		timeout = 3 * time.Minute
+	case "cover", "intro", "bookinfo":
+		timeout = 45 * time.Second
 	}
 	jobCtx, cancel := context.WithTimeout(parent, timeout)
 	var data interface{}
@@ -274,6 +277,8 @@ func (e *Engine) handle(parent context.Context, job busJob) {
 		data, err = e.runEbookParse(jobCtx, job, job.Payload)
 	case "ebook-chapter":
 		data, err = e.runEbookChapter(jobCtx, job, job.Payload)
+	case "cover", "intro", "bookinfo":
+		data, err = e.runMediaTask(jobCtx, job.Type, job.Payload)
 	default:
 		err = &parseErrorUnsupported{job.Type}
 	}

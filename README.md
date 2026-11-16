@@ -2,7 +2,9 @@
 
 **FnReader 软总线解析引擎（OpenWrt / LEDE / ARM）**
 
-版本：**0.1（稳定版）**
+版本：**0.2（适配 FnReader 服务端 2.6.17/18）**
+
+发布说明见 [`RELEASE_NOTES.md`](RELEASE_NOTES.md)。
 
 把 FnReader 电子书解析链路里的「解析桥」落到路由器上：设备作为软总线节点长轮询领任务，
 下载原书、解析成 `fnreader.ebook.v1` 分片回传，服务端本机解析作为兜底保持不变。
@@ -16,6 +18,7 @@ FnReader（legado-web）默认由服务端或手机 App 解析电子书。TRE �
 功耗低的路由器：
 
 - 服务端派 `ebook-parse` / `ebook-chapter` 任务，路由器领取并执行；
+- 也能承接 2.6.17+ 的 `cover` / `intro` / `bookinfo` 媒体类任务（只读详情页，不依赖书源规则）；
 - 解析结果按协议分片上传，服务端逻辑、书库数据完全不用改；
 - 解析缓存与下载的原文件放在 USB，不写路由器 flash；
 - 服务端离线/任务过期时仍由服务端本机兜底，路由器掉线不影响阅读。
@@ -38,10 +41,10 @@ FnReader（legado-web）默认由服务端或手机 App 解析电子书。TRE �
 
 ```sh
 # opkg（OpenWrt 23.05 / 24.10 / LEDE）
-opkg install --force-architecture /tmp/fnparse_0.1_armv7.ipk
+opkg install --force-architecture /tmp/fnparse_0.2_armv7.ipk
 
 # apk（OpenWrt 25.12+ / apk 分支）
-apk add --allow-untrusted /tmp/fnparse_0.1_armv7.apk
+apk add --allow-untrusted /tmp/fnparse_0.2_armv7.apk
 ```
 
 安装后：
@@ -51,6 +54,9 @@ apk add --allow-untrusted /tmp/fnparse_0.1_armv7.apk
 3. 插 U 盘，点「刷新状态」确认检测到 USB；缓存目录留空即自动选盘；
 4. 保存后点「重启引擎」，状态变绿即上线；
 5. 服务端「设备」页应看到 `owrt-xxxxxxxxxx` 节点在线。
+
+从 0.1 升级时，安装脚本会把旧默认 `claim_types` 自动补成
+`ebook-parse,ebook-chapter,cover,intro,bookinfo`；自定义过类型的不会被覆盖。
 
 开机自启由 procd 管理：
 
@@ -76,7 +82,7 @@ logread -f | grep fnparse
 | 缓存上限（MB） | 2048 | 超出按最旧清理 |
 | 原文件保留（小时） | 48 | 过期随清理删除 |
 | 日志级别 | info | debug/info/warn/error |
-| 领取任务类型 | `ebook-parse,ebook-chapter` | 逗号分隔 |
+| 领取任务类型 | `ebook-parse,ebook-chapter,cover,intro,bookinfo` | 逗号分隔；媒体类任务只读详情页 |
 
 界面还提供：运行状态、USB 挂载点列表、测试连接、查看日志、清空缓存、重启引擎。
 
@@ -90,6 +96,12 @@ logread -f | grep fnparse
   或约 2 MB；`GET /api/m/ebook/parts` 断点续传；`GET /api/m/ebook/file/<sha1>` 下载；
 - **代理桥**：`ebookMode=proxy` 下由服务端派单，超时/掉线由服务端本机兜底，
   本引擎只做节点，不抢服务端状态机；
+- **2.6.17/18 路由**：服务端按隐藏性能分派单（初始 50，成功 +4、失败 −8、慢请求再扣 2）。
+  `<55` 的低分设备只派 `media`（`cover`/`intro`/`bookinfo`），高分设备才派
+  `book`/`content`（含 `ebook-*`）；在线没有高分设备时全部类型放开。领取即锁 30 秒，
+  在途上限高分 3 / 低分 2，同一任务重复回传按 `duplicate` 处理；
+- **结果幂等**：`/remote/result` 返回 `ok:"duplicate"` / `"stale"`（非锁定设备）/
+  `ignored`（调试设备）均视为终态，不再重试；
 - **契约**：`fnreader.ebook.v1`，`k` 仅 `p/h1~h6/quote/hr/img`，`index` 全书连续，
   `total = 1 + 正文片数`。
 
@@ -101,10 +113,11 @@ logread -f | grep fnparse
 | MOBI / PRC | ✅ | PalmDOC 压缩 1/2、EXTH、h1-h3 分章；KF8 返回 `kf8-unsupported` |
 | PDF | ✅ | Flate 流 + ToUnicode；扫描件无文本层返回 `no-text-layer` |
 | TXT | ✅ | UTF-8/GBK/UTF-16 嗅探，「第 X 章/回/节」等章节规则 |
+| Web 详情页 | ✅ | `cover`/`intro`/`bookinfo`：og/meta、JSON-LD、封面 img、简介区块、字数/章节数 |
 
 错误码与服务端一致：`drm` / `corrupt` / `unsupported` / `kf8-unsupported` /
-`no-text-layer` / `font-encoding` / `timeout`，这些服务端直接 failed；其余网络类错误
-服务端本地兜底。
+`no-text-layer` / `font-encoding` / `timeout`；媒体任务额外使用 `fetch` / `not-found`，
+失败时回 `ok:false`，由服务端回退 `bookinfo` 或本机抓取。
 
 ## 7. 缓存
 
@@ -135,7 +148,8 @@ scripts/
   build_pkg.py          交叉编译 + 打 ipk/apk
   mock_server.py        本地模拟 legado-web，端到端验收
   gen_gbk.py            GBK 表生成
-dist/                   稳定版产物（0.1）
+dist/                   稳定版产物（0.2）
+  old/                  历史 0.1 包
 docs/                   协议对齐文档
 ```
 
@@ -151,10 +165,10 @@ python scripts/build_pkg.py --build
 产物：
 
 ```
-dist/fnparse_0.1_armv7.ipk
-dist/fnparse_0.1_arm64.ipk
-dist/fnparse_0.1_armv7.apk
-dist/fnparse_0.1_arm64.apk
+dist/fnparse_0.2_armv7.ipk
+dist/fnparse_0.2_arm64.ipk
+dist/fnparse_0.2_armv7.apk
+dist/fnparse_0.2_arm64.apk
 dist/SHA256SUMS
 ```
 
@@ -166,16 +180,13 @@ CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -ldflags "-s -w" 
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o fnparse-arm64 .
 ```
 
-## 10. 验收记录（0.1）
+## 10. 验收记录（0.2）
 
-- Windows 本机 `go build` 通过；`go vet` 无告警；parse 包单测通过（HTML 块规则、实体、GBK）；
-- 真实样本：EPUB（3 章）、MOBI《水浒传-三章》（3 章，UTF-8 嗅探修正）、PDF（1 节）、
-  TXT（1080 字）均解析成功；
-- 端到端联调（`scripts/mock_server.py` 模拟 legado-web）：pending 领任务 → 下载 →
-  解析（命中缓存）→ part0/partN 上传 → `remote/result` 返回
-  `{ok:true, chapters:3, parts:2}`，全链路 35 ms；
+- `go test ./parse` 通过：HTML 块规则、实体、GBK、og/meta 与 JSON-LD 详情页提取；
+- `go test .` 通过：详情页 HTTP 抓取、`cover`/`intro` 任务回传、result 幂等（duplicate/stale/ignored）；
+- `go vet ./...` 无告警；
 - ARMv7 / ARM64 交叉编译产物经 ELF 头校验（machine 0x28 / 0xB7）；
-- 打包脚本产出 ipk/apk 并生成 SHA256SUMS。
+- 打包脚本产出 0.2 版 ipk/apk，`scripts/verify_pkg.py` 校验版本、架构、默认领取类型全部通过；
 
 ## 11. 已知限制
 
@@ -184,13 +195,19 @@ CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o fnp
   （路由器通常没有 ghostscript）；
 - MOBI 只支持 PalmDOC 压缩 1/2，不处理 HUFF/CDIC；
 - apk 包未签名，必须 `--allow-untrusted`；
-- 解析质量以服务端 `fnreader.ebook.v1` 为准，个别复杂排版可能与手机端略有差异。
+- 解析质量以服务端 `fnreader.ebook.v1` 为准，个别复杂排版可能与手机端略有差异；
+- `cover` / `intro` / `bookinfo` 只解析静态 HTML（meta / JSON-LD / 简介区块），
+  JS 动态渲染或需要登录的详情页可能取不到，失败回 `ok:false` 由服务端回退；
+- 不实现 `search` / `toc` / `content` / `rank`（需要书源规则引擎），只做电子书解析与媒体元信息；
+- 新设备隐藏分为 50（低分），若已有高分手机在线，服务端只会派 `media` 类任务；
+  没有高分设备在线时全部类型放开，路由器仍可领 `ebook-*`。
 
 ## 12. 版本
 
 | 版本 | 日期 | 内容 |
 | --- | --- | --- |
 | 0.1 | 2026-11-15 | 首个稳定版：软总线节点 + EPUB/MOBI/PDF/TXT 解析 + LuCI + USB 缓存 + ipk/apk |
+| 0.2 | 2026-11-17 | 适配服务端 2.6.17/18：cover/intro/bookinfo 媒体任务、隐藏分路由说明、结果幂等 duplicate/stale/ignored |
 
 ## License
 

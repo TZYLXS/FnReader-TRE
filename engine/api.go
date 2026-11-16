@@ -27,10 +27,11 @@ import (
 var embeddedCACert []byte
 
 type busJob struct {
-	ID      string          `json:"id"`
-	Type    string          `json:"type"`
-	Payload json.RawMessage `json:"payload"`
-	Age     int64           `json:"age"`
+	ID        string          `json:"id"`
+	Type      string          `json:"type"`
+	TaskClass string          `json:"taskClass"`
+	Payload   json.RawMessage `json:"payload"`
+	Age       int64           `json:"age"`
 }
 
 type pendingResp struct {
@@ -224,16 +225,50 @@ func (c *apiClient) postResult(ctx context.Context, id string, ok bool, data int
 		body["error"] = errCode
 	}
 	var out struct {
-		OK       bool `json:"ok"`
-		Accepted bool `json:"accepted"`
+		OK       interface{} `json:"ok"`
+		Accepted interface{} `json:"accepted"`
 	}
 	if err := c.postJSON(ctx, "/api/m/remote/result", nil, body, &out, nil); err != nil {
 		return err
 	}
-	if !out.Accepted && !out.OK {
+	return resultError(out.OK, out.Accepted)
+}
+
+// resultError 解释 2.6.17+ 的 result 响应：
+// duplicate/stale/ignored 都是服务端已处理的终态，不需要重试。
+// accepted 可能是 bool，也可能是与 ok 相同的字符串（服务端直接回 ok）。
+func resultError(ok, accepted interface{}) error {
+	if truthy(accepted) {
+		return nil
+	}
+	switch v := ok.(type) {
+	case bool:
+		if v {
+			return nil
+		}
+		return errors.New("任务已被服务端回收（可能已兜底）")
+	case string:
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "duplicate", "stale", "ignored", "true", "ok":
+			return nil
+		}
+		return fmt.Errorf("服务端拒绝结果：%s", v)
+	default:
 		return errors.New("任务已被服务端回收（可能已兜底）")
 	}
-	return nil
+}
+
+func truthy(v interface{}) bool {
+	switch x := v.(type) {
+	case bool:
+		return x
+	case string:
+		switch strings.ToLower(strings.TrimSpace(x)) {
+		case "true", "ok", "accepted", "duplicate", "stale", "ignored":
+			return true
+		}
+	}
+	return false
 }
 
 // Download 整本下载，支持 Range 续传；expectSize>0 时校验大小。

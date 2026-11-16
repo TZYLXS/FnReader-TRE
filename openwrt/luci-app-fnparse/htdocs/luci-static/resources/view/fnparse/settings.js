@@ -242,8 +242,8 @@ return view.extend({
 		o.default = 'info';
 
 		o = s3.option(form.Value, 'claim_types', _('领取任务类型'));
-		o.placeholder = 'ebook-parse,ebook-chapter';
-		o.description = _('逗号分隔；只做整本解析可只留 ebook-parse。');
+		o.placeholder = 'ebook-parse,ebook-chapter,cover,intro,bookinfo';
+		o.description = _('逗号分隔；cover/intro/bookinfo 为 2.6.17+ 媒体类任务，只需详情页，不依赖书源规则。');
 
 		var formNode = m.render();
 		return Promise.resolve(formNode).then(function(node) {

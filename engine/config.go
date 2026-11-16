@@ -34,7 +34,7 @@ func defaultConfig() *Config {
 		CacheMaxMB:  2048,
 		TmpTTLHours: 48,
 		LogLevel:    "info",
-		ClaimTypes:  []string{"ebook-parse", "ebook-chapter"},
+		ClaimTypes:  []string{"ebook-parse", "ebook-chapter", "cover", "intro", "bookinfo"},
 	}
 }
 

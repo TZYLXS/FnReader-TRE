@@ -178,6 +178,11 @@ func sniffXMLCharset(head string) string {
 	return ""
 }
 
+// DecodeHTML 按文档内 XML/meta 声明嗅探编码并解码（UTF-8/GBK/UTF-16/latin-1）。
+func DecodeHTML(b []byte) string {
+	return decodeDoc(b)
+}
+
 // decodeDoc 解码一章 HTML/XHTML：先看 XML 声明，再退回自动嗅探。
 func decodeDoc(b []byte) string {
 	head := b

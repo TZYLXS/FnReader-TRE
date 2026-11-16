@@ -7,10 +7,10 @@
     python scripts/build_pkg.py --build    # 先调 go 交叉编译再打包
 
 产物：
-    dist/fnparse_0.1_armv7.ipk
-    dist/fnparse_0.1_arm64.ipk
-    dist/fnparse_0.1_armv7.apk
-    dist/fnparse_0.1_arm64.apk
+    dist/fnparse_0.2_armv7.ipk
+    dist/fnparse_0.2_arm64.ipk
+    dist/fnparse_0.2_armv7.apk
+    dist/fnparse_0.2_arm64.apk
     dist/SHA256SUMS
 """
 
@@ -33,11 +33,11 @@ LUCI = ROOT / "openwrt" / "luci-app-fnparse"
 ENGINE = ROOT / "engine"
 
 PKG_NAME = "luci-app-fnparse"
-PKG_VERSION = "0.1"
+PKG_VERSION = "0.2"
 PKG_RELEASE = "1"
 MAINTAINER = "FnReader <fnreader@local>"
-DESCRIPTION = ("FnReader 软总线解析引擎：长轮询领取 ebook-parse / ebook-chapter 任务，"
-               "下载原书解析后按 fnreader.ebook.v1 分片回传；LuCI 管理，解析缓存放 USB。")
+DESCRIPTION = ("FnReader 软总线解析引擎：长轮询领取 ebook-parse / ebook-chapter / cover / intro / "
+               "bookinfo 任务，下载原书或详情页后按协议回传；LuCI 管理，解析缓存放 USB。")
 
 ARCHS = [
     {
@@ -287,7 +287,7 @@ def build_apk(arch):
 pkgname = {pkg}
 pkgver = {ver}-r{rel}
 pkgdesc = {desc}
-url = https://github.com/FnReader/FnReader-TRE
+url = https://github.com/TZYLXS/FnReader-TRE
 arch = {arch}
 license = MIT
 origin = {pkg}

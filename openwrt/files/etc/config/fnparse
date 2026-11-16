@@ -22,4 +22,4 @@ config fnparse 'main'
 	# debug/info/warn/error
 	option log_level 'info'
 	# 领取哪些任务类型（逗号分隔）
-	option claim_types 'ebook-parse,ebook-chapter'
+	option claim_types 'ebook-parse,ebook-chapter,cover,intro,bookinfo'

@@ -4,4 +4,10 @@ chmod 755 /usr/bin/fnparse /etc/init.d/fnparse /usr/libexec/rpcd/fnparse 2>/dev/
 if [ -x /etc/init.d/fnparse ]; then
 	/etc/init.d/fnparse enable 2>/dev/null
 fi
+# 0.1 升级到 0.2：旧默认只领 ebook 任务，补上 2.6.17+ 的媒体类
+old=$(uci -q get fnparse.main.claim_types 2>/dev/null)
+if [ "$old" = "ebook-parse,ebook-chapter" ]; then
+	uci set fnparse.main.claim_types='ebook-parse,ebook-chapter,cover,intro,bookinfo'
+	uci commit fnparse
+fi
 exit 0
