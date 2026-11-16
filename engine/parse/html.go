@@ -9,10 +9,11 @@ import (
 //   - 只服务于「正文 → k/t 段落」，不实现完整 DOM 语义
 //   - 跳过 script/style/noscript/head/svg 子树
 type htmlNode struct {
-	tag   string
-	attrs map[string]string
-	text  string
-	kids  []*htmlNode
+	tag    string
+	attrs  map[string]string
+	text   string
+	kids   []*htmlNode
+	parent *htmlNode
 }
 
 var voidTags = map[string]bool{
@@ -65,7 +66,7 @@ func parseHTML(src string) *htmlNode {
 			top.kids[n-1].text += s
 			return
 		}
-		top.kids = append(top.kids, &htmlNode{tag: "#text", text: s})
+		top.kids = append(top.kids, &htmlNode{tag: "#text", text: s, parent: top})
 	}
 
 	i := 0
@@ -198,6 +199,7 @@ func parseHTML(src string) *htmlNode {
 			}
 			node := &htmlNode{tag: name, attrs: attrs}
 			top := stack[len(stack)-1]
+			node.parent = top
 			top.kids = append(top.kids, node)
 			if !selfClose && !voidTags[name] {
 				stack = append(stack, node)

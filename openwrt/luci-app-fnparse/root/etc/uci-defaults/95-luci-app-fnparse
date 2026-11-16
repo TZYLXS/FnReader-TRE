@@ -4,10 +4,18 @@ chmod 755 /usr/bin/fnparse /etc/init.d/fnparse /usr/libexec/rpcd/fnparse 2>/dev/
 if [ -x /etc/init.d/fnparse ]; then
 	/etc/init.d/fnparse enable 2>/dev/null
 fi
-# 0.1 升级到 0.2：旧默认只领 ebook 任务，补上 2.6.17+ 的媒体类
-old=$(uci -q get fnparse.main.claim_types 2>/dev/null)
-if [ "$old" = "ebook-parse,ebook-chapter" ]; then
-	uci set fnparse.main.claim_types='ebook-parse,ebook-chapter,cover,intro,bookinfo'
+# 0.2 → 0.3：插件定位改为「只承接媒体类（cover/intro/bookinfo）」，领取类型写死。
+# 旧配置若含 ebook 类任务类型，一律改为媒体三类；引擎侧会忽略其它取值。
+t=$(uci -q get fnparse.main.claim_types 2>/dev/null)
+case ",$t," in
+  *,ebook-parse,*|*,ebook-chapter,*)
+	uci set fnparse.main.claim_types='cover,intro,bookinfo'
+	uci commit fnparse
+	;;
+esac
+# 0.2 的 concurrency 已废弃（引擎写死单线程），清理避免误导
+if uci -q get fnparse.main.concurrency >/dev/null 2>&1; then
+	uci -q delete fnparse.main.concurrency
 	uci commit fnparse
 fi
 exit 0

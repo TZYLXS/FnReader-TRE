@@ -14,7 +14,8 @@ import (
 )
 
 // 软总线 2.6.17+ 的 media 类任务：cover / intro / bookinfo。
-// 这三类只依赖书籍详情页，不需要书源规则，适合由 OpenWRT 低功耗节点承接。
+// 解析顺序：payload.source 对应的书源 ruleBookInfo 规则优先（书源解析），
+// 规则取不到时回退通用网页解析（og/meta、JSON-LD、简介区块），保证任务有兜底。
 type mediaPayload struct {
 	BookURL string `json:"bookUrl"`
 	Source  string `json:"source"`
@@ -46,12 +47,35 @@ func (e *Engine) runMediaTask(ctx context.Context, typ string, raw json.RawMessa
 		return nil, &parse.Error{Code: "corrupt", Msg: "bookUrl 必须是 http/https 地址"}
 	}
 
+	vars := parse.RuleVars{Name: p.Name, Author: p.Author, BookURL: bookURL}
+	rule := e.bookSourceRule(ctx, p.Source)
+	pageURL := bookURL
+	if rule != nil {
+		if initURL := parse.ResolveInitURL(rule.Init, vars); initURL != "" {
+			pageURL = initURL
+			e.log.Infof("书源规则 init 指定详情页：%s", pageURL)
+		}
+	}
+
 	start := time.Now()
-	page, finalURL, err := fetchBookPage(ctx, bookURL)
+	page, finalURL, err := fetchBookPage(ctx, pageURL)
 	if err != nil {
 		return nil, &parse.Error{Code: "fetch", Msg: err.Error()}
 	}
-	meta := parse.ExtractWebMeta(page, finalURL)
+
+	var meta parse.WebMeta
+	if rule != nil {
+		if res, used := parse.ApplyBookInfoRule(page, finalURL, rule, vars); used {
+			meta = webMetaFromRule(res)
+			e.log.Infof("书源规则解析 %s：name=%q cover=%v intro=%d 字（%s）",
+				bookURL, meta.Title, meta.CoverURL != "", len([]rune(meta.Intro)), p.Source)
+		} else {
+			e.log.Infof("书源规则未命中 %s（%s），回退通用解析", bookURL, p.Source)
+		}
+	}
+	// 通用网页解析兜底：只补规则没拿到的空字段
+	web := parse.ExtractWebMeta(page, finalURL)
+	fillWebMeta(&meta, web)
 	e.log.Infof("详情页解析 %s：cover=%v intro=%d 字 用时 %d ms",
 		bookURL, meta.CoverURL != "", len([]rune(meta.Intro)), time.Since(start).Milliseconds())
 
@@ -86,6 +110,47 @@ func (e *Engine) runMediaTask(ctx context.Context, typ string, raw json.RawMessa
 		return out, nil
 	default:
 		return nil, &parseErrorUnsupported{typ}
+	}
+}
+
+// webMetaFromRule 把书源规则结果转成统一元信息结构。
+func webMetaFromRule(r parse.RuleResult) parse.WebMeta {
+	return parse.WebMeta{
+		Title:       r.Name,
+		Author:      r.Author,
+		Intro:       r.Intro,
+		CoverURL:    r.CoverURL,
+		Kind:        r.Kind,
+		WordCount:   r.WordCount,
+		LastChapter: r.LastChapter,
+	}
+}
+
+// fillWebMeta 用通用解析结果补空字段，不覆盖书源规则已拿到的值。
+func fillWebMeta(dst *parse.WebMeta, src parse.WebMeta) {
+	if dst.Title == "" {
+		dst.Title = src.Title
+	}
+	if dst.Author == "" {
+		dst.Author = src.Author
+	}
+	if dst.Intro == "" {
+		dst.Intro = src.Intro
+	}
+	if dst.CoverURL == "" {
+		dst.CoverURL = src.CoverURL
+	}
+	if dst.Kind == "" {
+		dst.Kind = src.Kind
+	}
+	if dst.WordCount == "" {
+		dst.WordCount = src.WordCount
+	}
+	if dst.LastChapter == "" {
+		dst.LastChapter = src.LastChapter
+	}
+	if dst.TotalChapterNum == 0 {
+		dst.TotalChapterNum = src.TotalChapterNum
 	}
 }
 

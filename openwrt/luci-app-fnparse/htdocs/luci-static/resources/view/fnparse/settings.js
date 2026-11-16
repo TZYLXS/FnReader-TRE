@@ -161,7 +161,7 @@ return view.extend({
 		var st = data[1];
 
 		var m = new form.Map('fnparse', _('FnReader 解析引擎'),
-			_('把 FnReader 服务端的电子书解析任务挂到路由器：长轮询领任务 → 下载原书 → 解析成分片回传。引擎为纯静态 Go 二进制，安装包内自带全部运行环境。'));
+			_('把 FnReader 服务端的简介/封面任务挂到路由器：单线程长轮询领任务 → 按书源规则解析详情页（规则不命中时用通用网页解析兜底）→ 回传。引擎为纯静态 Go 二进制，安装包内自带全部运行环境。'));
 
 		var s = m.section(form.NamedSection, 'main', 'fnparse', _('接入设置'));
 		s.anonymous = true;
@@ -209,11 +209,6 @@ return view.extend({
 		o.rmempty = false;
 		o.description = _('未填缓存目录时，自动在 /mnt/* 下寻找可写 USB 存储。');
 
-		o = s2.option(form.Value, 'concurrency', _('并发解析数'));
-		o.datatype = 'range(1,8)';
-		o.placeholder = '2';
-		o.description = _('同时解析的书写；路由器 CPU 弱建议 1-2。');
-
 		o = s2.option(form.Value, 'poll_wait', _('长轮询等待（秒）'));
 		o.datatype = 'range(0,30)';
 		o.placeholder = '20';
@@ -241,9 +236,9 @@ return view.extend({
 		o.value('error', 'error');
 		o.default = 'info';
 
-		o = s3.option(form.Value, 'claim_types', _('领取任务类型'));
-		o.placeholder = 'ebook-parse,ebook-chapter,cover,intro,bookinfo';
-		o.description = _('逗号分隔；cover/intro/bookinfo 为 2.6.17+ 媒体类任务，只需详情页，不依赖书源规则。');
+		o = s3.option(form.Value, 'claim_types', _('领取任务类型（写死）'));
+		o.placeholder = 'cover,intro,bookinfo';
+		o.description = _('已写死 cover/intro/bookinfo：插件只承接简介与封面（媒体类），固定单线程、每次只领 1 个；详情页优先按服务端书源规则解析，规则不命中时用通用网页解析兜底。');
 
 		var formNode = m.render();
 		return Promise.resolve(formNode).then(function(node) {

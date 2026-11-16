@@ -24,17 +24,21 @@ type Config struct {
 	ClaimTypes  []string
 }
 
+// fixedClaimTypes 写死插件只承接软总线媒体类（简介/封面），
+// 服务端误派 book/content 类时引擎立即回传 unsupported（见 bus.go）。
+var fixedClaimTypes = []string{"cover", "intro", "bookinfo"}
+
 func defaultConfig() *Config {
 	return &Config{
 		Enabled:     true,
 		USBAuto:     true,
-		Concurrency: 2,
+		Concurrency: 1,
 		PollWait:    20,
 		PartMaxMB:   2,
 		CacheMaxMB:  2048,
 		TmpTTLHours: 48,
 		LogLevel:    "info",
-		ClaimTypes:  []string{"ebook-parse", "ebook-chapter", "cover", "intro", "bookinfo"},
+		ClaimTypes:  []string{"cover", "intro", "bookinfo"},
 	}
 }
 
@@ -80,9 +84,9 @@ func loadConfig(path string) (*Config, error) {
 		return cfg, err
 	}
 	cfg.Server = normalizeServer(cfg.Server)
-	if len(cfg.ClaimTypes) == 0 {
-		cfg.ClaimTypes = []string{"ebook-parse"}
-	}
+	// 领取类型写死：本插件只承接 media 类（cover/intro/bookinfo），
+	// 忽略 UCI 里的其它取值，避免误配后去抢书源/正文任务。
+	cfg.ClaimTypes = append([]string{}, fixedClaimTypes...)
 	if cfg.Concurrency < 1 {
 		cfg.Concurrency = 1
 	}

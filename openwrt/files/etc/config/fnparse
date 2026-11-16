@@ -9,8 +9,6 @@ config fnparse 'main'
 	# JSON 解析缓存目录；留空且 usb_autodetect=1 时自动选 USB 挂载点
 	option cache_dir ''
 	option usb_autodetect '1'
-	# 并发解析任务数（1-8，路由器建议 1-2）
-	option concurrency '2'
 	# 长轮询等待秒数（服务端上限 30）
 	option poll_wait '20'
 	# 单个正文分片上限（MB，<=8）
@@ -21,5 +19,5 @@ config fnparse 'main'
 	option tmp_ttl_hours '48'
 	# debug/info/warn/error
 	option log_level 'info'
-	# 领取哪些任务类型（逗号分隔）
-	option claim_types 'ebook-parse,ebook-chapter,cover,intro,bookinfo'
+	# 领取类型已写死 cover,intro,bookinfo（本插件只做简介/封面，此行为展示用）
+	option claim_types 'cover,intro,bookinfo'

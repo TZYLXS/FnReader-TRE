@@ -194,6 +194,9 @@ func jsonNoEscape(v interface{}) ([]byte, error) {
 	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }
 
+// pendingLimit 写死每次只领 1 个任务：插件固定单线程处理，避免锁定多个任务超时。
+const pendingLimit = 1
+
 func (c *apiClient) pending(ctx context.Context, wait int) ([]busJob, error) {
 	if c.token == "" {
 		return nil, errors.New("未配置访问令牌（Token）")
@@ -204,13 +207,30 @@ func (c *apiClient) pending(ctx context.Context, wait int) ([]busJob, error) {
 		"model": {c.devArch},
 		"ver":   {c.ver},
 		"wait":  {strconv.Itoa(wait)},
-		"limit": {"5"},
+		"limit": {strconv.Itoa(pendingLimit)},
 	}
 	var out pendingResp
 	if err := c.getJSON(ctx, "/api/m/remote/pending", q, &out); err != nil {
 		return nil, err
 	}
 	return out.Jobs, nil
+}
+
+// fetchSources 拉取服务端书源列表（Legado 导出格式），供 media 任务的书源规则解析使用。
+func (c *apiClient) fetchSources(ctx context.Context) ([]byte, error) {
+	req, err := c.newRequest(ctx, http.MethodGet, "/api/m/sources.json", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.ctl.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(readErrBody(resp))
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 }
 
 func (c *apiClient) postResult(ctx context.Context, id string, ok bool, data interface{}, errCode string) error {

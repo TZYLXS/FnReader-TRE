@@ -10,19 +10,36 @@ import (
 	"time"
 )
 
-// Engine：软总线「解析桥」节点。
+// 软总线领取策略（写死，不随配置变化）：
+//   - busWorkers = 1：固定单线程领取/处理
+//   - pendingLimit = 1：每次只领一个任务
+//   - 只承接 media 类（cover/intro/bookinfo），其余已领取任务立即回传失败
 //
-//	GET  /api/m/remote/pending   领任务（长轮询，同时完成设备心跳）
-//	GET  /api/m/ebook/file/…     整本下载（Range 续传）
-//	POST /api/m/ebook/part       分片上传（part0 清单 + 正文分片）
-//	POST /api/m/remote/result    回任务结果
-//	POST /api/m/ebook/chapter    单章按需补章（可选）
+// 关于「隐藏分最高 50」：服务端隐藏分由 server.js 内部维护（成功 +4 / 失败 −8），
+// 客户端没有字段可以直接覆盖，因此无法把分数真正写死。插件用两个手段实现等效效果：
+//   1) 只领 media 类——即使服务端误派 book/content，也立即回传失败（−8 分），
+//      分数涨上去后会被打回来，无法稳定维持高分；
+//   2) 单线程 + 每次只领 1 个，减少成功加分频率。
+// 因此插件实际只会停留在低分档（<55，media only），等同于「隐藏分封顶 50」。
+const (
+	busWorkers     = 1
+	busQueueCap    = 4
+	hiddenScoreCap = 50
+)
+
+var mediaTaskTypes = map[string]bool{
+	"cover":    true,
+	"intro":    true,
+	"bookinfo": true,
+}
+
 type Engine struct {
 	cfg     *Config
 	log     *Logger
 	api     *apiClient
 	cache   *Cache
 	st      *stateStore
+	sources *sourceRepo
 	version string
 
 	jobs chan busJob
@@ -45,21 +62,15 @@ func newEngine(cfg *Config, log *Logger, version string) *Engine {
 		cfg:     cfg,
 		log:     log,
 		cache:   newCache(cfg, log),
+		sources: newSourceRepo(),
 		version: version,
-		jobs:    make(chan busJob, maxInt(4, cfg.Concurrency*3)),
+		jobs:    make(chan busJob, busQueueCap),
 		inIDs:   map[string]bool{},
 		inSha:   map[string]bool{},
 	}
 	e.api = newAPIClient(cfg, deriveDeviceID(""), devName, version)
 	e.st = newStateStore("")
 	return e
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func shaFromPayload(raw json.RawMessage) string {
@@ -105,7 +116,7 @@ func (e *Engine) Run(ctx context.Context) error {
 		s.LogPath = e.log.Path()
 	})
 
-	for i := 0; i < e.cfg.Concurrency; i++ {
+	for i := 0; i < busWorkers; i++ {
 		go e.worker(ctx, i)
 	}
 
@@ -197,6 +208,7 @@ func (e *Engine) ready() bool {
 		e.log.Warnf("缓存目录不可用：%v", err)
 		return false
 	}
+	e.sources.setRoot(e.cache.Root())
 	e.st.update(func(s *State) {
 		s.CacheReady = true
 		s.CacheDir = e.cache.Root()
@@ -206,6 +218,20 @@ func (e *Engine) ready() bool {
 }
 
 func (e *Engine) enqueue(j busJob) {
+	if !mediaTaskTypes[j.Type] {
+		// 插件只承接简介/封面：非 media 类任务立即回传失败。
+		// 服务端会按「失败 −8 分」调低隐藏分并自己兜底，等效把分数压回 50 以下。
+		e.log.Infof("拒绝非媒体任务 %s type=%s class=%s，立即回传 unsupported（隐藏分上限 %d）",
+			j.ID, j.Type, j.TaskClass, hiddenScoreCap)
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			if err := e.api.postResult(ctx, j.ID, false, nil, "unsupported"); err != nil {
+				e.log.Warnf("unsupported 回传失败 %s：%v", j.ID, err)
+			}
+		}()
+		return
+	}
 	if !e.cfg.claims(j.Type) {
 		e.log.Debugf("跳过非本机任务类型 %s（%s）", j.Type, j.ID)
 		return

@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
-EXPECT = "0.2"
+EXPECT = "0.3"
 
 
 def ar_members(path):
