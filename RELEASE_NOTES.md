@@ -1,3 +1,31 @@
+# FnReader-TRE 0.4
+
+**2026-11-22 · 适配 FnReader 服务端 3.0.0 / 软总线 2.6.19：按执行预算收手 + 能力上报**
+
+## 本版变更
+
+### 按服务端预算收手
+
+- `GET /api/m/remote/pending` 的任务新增 `timeoutMs` / `serverTime`（服务端按任务类 + 设备实测建模）；
+- 引擎优先用 `timeoutMs - 300 ms` 作为执行预算，不再一律跑满本地写死的时长，
+  避免「服务端早已判超时、插件还在跑，回传只能拿到 `stale`」；
+- 长任务保底：`ebook-parse` 不低于 3 分钟（服务端 waitMs 600 s，3 分钟内回传不会被判 stale）、
+  `ebook-chapter` 不低于 30 秒；媒体类严格跟随预算；
+- 老服务端（无 `timeoutMs`）自动回落到 0.3 的本地默认（整本 12 min / 单章 3 min / 媒体 45 s）。
+
+### 能力上报
+
+- pending 请求带上 `cores`（`runtime.NumCPU()`）、`mem`（`/proc/meminfo` MemTotal，MB）、
+  `inflight=1`、`supports=cover,intro,bookinfo`；
+- 服务端据此给能力初值分并按 `book/content/media` 切额度；不报则按 50 分默认处理。
+
+### 兼容
+
+- 协议字段全部可选，0.3 的服务端/引擎组合仍可运行；
+- 领取策略不变：单线程、`limit=1`、只领媒体类。
+
+---
+
 # FnReader-TRE 0.3
 
 **2026-11-17 · 书源规则解析 + 只承接简介/封面，适配 FnReader 服务端 2.6.17 / 2.6.18**

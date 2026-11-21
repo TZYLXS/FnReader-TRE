@@ -7,10 +7,10 @@
     python scripts/build_pkg.py --build    # 先调 go 交叉编译再打包
 
 产物：
-    dist/fnparse_0.3_armv7.ipk
-    dist/fnparse_0.3_arm64.ipk
-    dist/fnparse_0.3_armv7.apk
-    dist/fnparse_0.3_arm64.apk
+    dist/fnparse_0.4_armv7.ipk
+    dist/fnparse_0.4_arm64.ipk
+    dist/fnparse_0.4_armv7.apk
+    dist/fnparse_0.4_arm64.apk
     dist/SHA256SUMS
 """
 
@@ -33,7 +33,7 @@ LUCI = ROOT / "openwrt" / "luci-app-fnparse"
 ENGINE = ROOT / "engine"
 
 PKG_NAME = "luci-app-fnparse"
-PKG_VERSION = "0.3"
+PKG_VERSION = "0.4"
 PKG_RELEASE = "1"
 MAINTAINER = "FnReader <fnreader@local>"
 DESCRIPTION = ("FnReader 软总线解析引擎：单线程长轮询领取 cover / intro / bookinfo 媒体任务，"

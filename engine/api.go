@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -27,11 +28,13 @@ import (
 var embeddedCACert []byte
 
 type busJob struct {
-	ID        string          `json:"id"`
-	Type      string          `json:"type"`
-	TaskClass string          `json:"taskClass"`
-	Payload   json.RawMessage `json:"payload"`
-	Age       int64           `json:"age"`
+	ID         string          `json:"id"`
+	Type       string          `json:"type"`
+	TaskClass  string          `json:"taskClass"`
+	Payload    json.RawMessage `json:"payload"`
+	Age        int64           `json:"age"`
+	TimeoutMs  int64           `json:"timeoutMs"`
+	ServerTime int64           `json:"serverTime"`
 }
 
 type pendingResp struct {
@@ -197,6 +200,30 @@ func jsonNoEscape(v interface{}) ([]byte, error) {
 // pendingLimit 写死每次只领 1 个任务：插件固定单线程处理，避免锁定多个任务超时。
 const pendingLimit = 1
 
+// memTotalMb 读取 /proc/meminfo 的 MemTotal（单位 MB）。非 Linux 或读不到返回 0，
+// 服务端 normalizeCaps 会忽略 0，仍按其余字段算能力分。
+func memTotalMb() int {
+	data, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if !strings.HasPrefix(line, "MemTotal:") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			return 0
+		}
+		kb, err := strconv.Atoi(fields[1])
+		if err != nil {
+			return 0
+		}
+		return kb / 1024
+	}
+	return 0
+}
+
 func (c *apiClient) pending(ctx context.Context, wait int) ([]busJob, error) {
 	if c.token == "" {
 		return nil, errors.New("未配置访问令牌（Token）")
@@ -208,6 +235,11 @@ func (c *apiClient) pending(ctx context.Context, wait int) ([]busJob, error) {
 		"ver":   {c.ver},
 		"wait":  {strconv.Itoa(wait)},
 		"limit": {strconv.Itoa(pendingLimit)},
+		// 2.6.19 起服务端按能力上报给初值分、按任务类切额度；不报就按 50 分默认处理。
+		"cores":    {strconv.Itoa(runtime.NumCPU())},
+		"mem":      {strconv.Itoa(memTotalMb())},
+		"inflight": {"1"},
+		"supports": {"cover,intro,bookinfo"},
 	}
 	var out pendingResp
 	if err := c.getJSON(ctx, "/api/m/remote/pending", q, &out); err != nil {

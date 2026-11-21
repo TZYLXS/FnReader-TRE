@@ -15,7 +15,7 @@ import (
 	"fnparse/parse"
 )
 
-var version = "0.3"
+var version = "0.4"
 
 const defaultConfigPath = "/etc/config/fnparse"
 

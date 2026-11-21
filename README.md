@@ -2,7 +2,7 @@
 
 **FnReader 软总线解析引擎（OpenWrt / LEDE / ARM）**
 
-版本：**0.3（书源规则解析 + 只承接简介/封面，适配 FnReader 服务端 2.6.17/18）**
+版本：**0.4（按服务端执行预算收手 + 能力上报，适配 FnReader 服务端 3.0.0 / 软总线 2.6.19）**
 
 发布说明见 [`RELEASE_NOTES.md`](RELEASE_NOTES.md)。
 
@@ -44,10 +44,10 @@ FnReader（legado-web）默认由服务端或手机 App 解析电子书。TRE �
 
 ```sh
 # opkg（OpenWrt 23.05 / 24.10 / LEDE）
-opkg install --force-architecture /tmp/fnparse_0.3_armv7.ipk
+opkg install --force-architecture /tmp/fnparse_0.4_armv7.ipk
 
 # apk（OpenWrt 25.12+ / apk 分支）
-apk add --allow-untrusted /tmp/fnparse_0.3_armv7.apk
+apk add --allow-untrusted /tmp/fnparse_0.4_armv7.apk
 ```
 
 安装后：
@@ -111,6 +111,10 @@ logread -f | grep fnparse
   只领 `media`、对误派的 `book`/`content` 立即回传 `unsupported`（−8 分），
   因此分数无法稳定维持高分，等效隐藏分封顶 50。领取即锁 30 秒，同一任务重复回传按
   `duplicate` 处理；
+- **2.6.19 / 3.0.0 传输建模**：pending 任务新增 `timeoutMs` / `serverTime`，引擎按服务端
+  预算收手（媒体类严格跟随，整本电子书保底 3 分钟，避免服务端已判超时还在跑）；
+  同时上报 `cores` / `mem` / `inflight` / `supports`，服务端据此算能力初值分并按
+  `book`/`content`/`media` 切额度。不报也能跑，只是按 50 分默认处理；
 - **结果幂等**：`/remote/result` 返回 `ok:"duplicate"` / `"stale"`（非锁定设备）/
   `ignored`（调试设备）均视为终态，不再重试；
 - **契约**：`fnreader.ebook.v1`，`k` 仅 `p/h1~h6/quote/hr/img`，`index` 全书连续，
@@ -226,6 +230,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o fnp
 | 0.1 | 2026-11-15 | 首个稳定版：软总线节点 + EPUB/MOBI/PDF/TXT 解析 + LuCI + USB 缓存 + ipk/apk |
 | 0.2 | 2026-11-17 | 适配服务端 2.6.17/18：cover/intro/bookinfo 媒体任务、隐藏分路由说明、结果幂等 duplicate/stale/ignored |
 | 0.3 | 2026-11-17 | 书源规则解析（ruleBookInfo 子集）、写死单线程领取、只承接简介/封面、隐藏分等效封顶 50 |
+| 0.4 | 2026-11-22 | 适配服务端 3.0.0 / 软总线 2.6.19：按 `timeoutMs` 预算收手（长任务保底）、上报能力字段、文档同步 |
 
 ## License
 

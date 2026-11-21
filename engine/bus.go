@@ -295,6 +295,24 @@ func (e *Engine) handle(parent context.Context, job busJob) {
 	case "cover", "intro", "bookinfo":
 		timeout = 45 * time.Second
 	}
+	// 服务端 2.6.19 起按「任务类 + 设备实测」下发执行预算（timeoutMs）。
+	// 有预算就按预算收手：否则服务端早已判超时、我们还在跑，回传只能拿到 stale。
+	if job.TimeoutMs > 0 {
+		budget := time.Duration(job.TimeoutMs)*time.Millisecond - 300*time.Millisecond
+		if budget < 3*time.Second {
+			budget = 3 * time.Second
+		}
+		// 长任务保底：整本电子书不可能在服务端 30 秒的 ebook 基线下跑完，
+		// 但 ebook-parse 的 waitMs 是 600 秒，3 分钟内回传不会被判 stale。
+		if job.Type == "ebook-parse" && budget < 3*time.Minute {
+			budget = 3 * time.Minute
+		}
+		if job.Type == "ebook-chapter" && budget < 30*time.Second {
+			budget = 30 * time.Second
+		}
+		timeout = budget
+	}
+	e.log.Infof("任务 %s 执行预算 %s（服务端 timeoutMs=%d）", job.ID, timeout, job.TimeoutMs)
 	jobCtx, cancel := context.WithTimeout(parent, timeout)
 	var data interface{}
 	var err error
